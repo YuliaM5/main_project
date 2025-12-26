@@ -20,6 +20,14 @@
 
 Активируйте виртуальное окружение:
 
+**Windows:**
+
+```venv\Scripts\activate```
+
+**Linux:**
+
+```source venv/bin/activate```
+
 Установите зависимости из файла requirements.txt:
 
 ```pip install -r requirements.txt```
