@@ -150,6 +150,7 @@ def search_film(name):
 
 async def cancel(update: Update, context: CallbackContext):
     await update.message.reply_text("Поиск отменен")
+    return ConversationHandler.END
 
 
 def main():
@@ -157,14 +158,21 @@ def main():
 
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("random", random_handler))
-
-    app.add_handler(ConversationHandler(
+    
+    conv_handler = ConversationHandler(
         entry_points=[CommandHandler("film", film_handler)],
         states={
-            INPUT_MOVIE: [MessageHandler(filters.TEXT & ~filters.COMMAND, search_movie)]
+            INPUT_MOVIE: [
+                MessageHandler(filters.TEXT & ~filters.COMMAND, search_movie),
+                CommandHandler("cancel", cancel)
+            ]
         },
-        fallbacks=[CommandHandler("cancel", cancel)]
-    ))
+        fallbacks=[CommandHandler("cancel", cancel)],
+        # Важно: allow_reentry позволяет команде /film снова запустить диалог
+        allow_reentry=True
+    )
+    
+    app.add_handler(conv_handler)
 
     app.run_polling()
 
