@@ -39,6 +39,7 @@ Telegram бот для поиска информации о фильмах че�
 Создайте файл `.env` в корне проекта:
 
 TELEGRAM_TOKEN=ваш_токен_бота_telegram
+
 KINOPOISK_TOKEN=ваш_токен_api_kinopoisk
 
 
