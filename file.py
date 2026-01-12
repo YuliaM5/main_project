@@ -1,9 +1,16 @@
 import requests
 from telegram import Update
 from telegram.ext import Application, CallbackContext, CommandHandler, MessageHandler, filters, ConversationHandler
+from dotenv import load_dotenv
+import os
 
-KP_TOKEN = 'ZK1559Z-4F54HDE-HVHK0RB-QJP47FE'
-TELEGRAM_TOKEN = "8312226209:AAHdUDqRlw3zH8T4fN8OVP-RgN-RszBXjtw"
+# Загружаем переменные из .env файла
+load_dotenv()
+
+# Получаем токены из переменных окружения
+KP_TOKEN = os.getenv('KINOPOISK_TOKEN')
+TELEGRAM_TOKEN = os.getenv('TELEGRAM_TOKEN')
+
 INPUT_MOVIE = 0
 
 
