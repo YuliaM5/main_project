@@ -1,6 +1,15 @@
 import requests
+from telegram import Update
+from telegram.ext import Application, CallbackContext, CommandHandler, MessageHandler, filters, ConversationHandler
 
 KP_TOKEN = 'ZK1559Z-4F54HDE-HVHK0RB-QJP47FE'
+TELEGRAM_TOKEN = "8312226209:AAHdUDqRlw3zH8T4fN8OVP-RgN-RszBXjtw"
+INPUT_MOVIE = 0
+
+
+async def start(update: Update, context: CallbackContext):
+    await update.message.reply_text(
+        "Привет! Этот бот ищет фильмы\nДоступные команды: \n /random - случайный фильм\n /film - поиск по названию\n")
 
 
 def get_film_info(data):
@@ -40,15 +49,28 @@ def get_film_info(data):
         if 'imdb' in data["rating"]:
             if data["rating"]["imdb"] != 0:
                 msg += f'Рейтинг imdb: {data["rating"]["imdb"]}' + '\n'
-    if 'shortDescription' in data and data["shortDescription"]:
+    if 'shortDescription' in data:
         msg += f'Описание: {data["shortDescription"]}' + '\n'
 
-    return msg
+    img_url = None
+    if 'poster' in data:
+        img_url = data["poster"]["url"]
+
+    return msg, img_url
+
+
+async def random_handler(update: Update, context: CallbackContext):
+    msg, img = random_film()
+
+    if img:
+        await update.message.reply_photo(photo=img, caption=msg)
+    else:
+        await update.message.reply_text(msg)
 
 
 def random_film():
     url = 'https://api.kinopoisk.dev/v1.4/movie/random'
-
+    img = None
     try:
         response = requests.get(url, headers={'X-API-KEY': KP_TOKEN}, params={
             'notNullFields': ['name', 'status', 'year', 'countries.name', 'genres.name', 'rating.kp', 'rating.imdb',
@@ -56,14 +78,37 @@ def random_film():
 
         if response.status_code == 200:
             data = response.json()
-            msg = get_film_info(data)
+            msg, img = get_film_info(data)
         else:
             msg = f"Не удалось получить данные" + '\n'
+            print(f"Failed to retrieve data: {response}")
 
     except requests.exceptions.RequestException as e:
         msg = f"Не удалось получить данные" + '\n'
+        print(f"An error occurred: {e}")
 
-    return msg
+    return msg, img
+
+
+async def film_handler(update: Update, context: CallbackContext):
+    await update.message.reply_text("Привет! Я помогу найти фильм по названию, введите название фильма: ")
+    return INPUT_MOVIE
+
+
+async def search_movie(update: Update, context: CallbackContext):
+    movie_name = update.message.text
+    res = search_film(movie_name)
+
+    if isinstance(res, str):
+        await update.message.reply_text(res)
+    else:
+        for msg, img in res:
+            if img:
+                await update.message.reply_photo(photo=img, caption=msg)
+            else:
+                await update.message.reply_text(msg)
+
+    return ConversationHandler.END
 
 
 def search_film(name):
@@ -79,127 +124,43 @@ def search_film(name):
             if 'docs' in data:
                 films = data['docs']
                 for film in films:
-                    msg = get_film_info(film)
-                    res.append(msg)
+                    msg, img = get_film_info(film)
+                    if img:
+                        count += 1
+                        res.append((msg, img))
                     if count == 10:
                         break
                 return res
         else:
-            msg = f"Не удалось получить данные" + '\n'
+            msg += f"Не удалось получить данные" + '\n'
 
     except requests.exceptions.RequestException as e:
-        msg = f"Не удалось получить данные" + '\n'
+        msg += f"Не удалось получить данные" + '\n'
+        print(f"An error occurred: {e}")
 
     return msg
 
 
-def get_params():
-    params = {}
-
-    genre = input('Введите жанр(Примеры: "драма", "комедия", "!мелодрама", "+ужасы") или -')
-    if genre != '-':
-        params['genres.name'] = genre
-
-    film_year = input('Введите год(Примеры: 2000, 1999) или -')
-    if film_year != '-':
-        params['year'] = film_year
-
-    film_country = input('Введите страну(Примеры: Россия, США, Франция) или -')
-    if film_country != '-':
-        params['countries.name'] = film_country
-
-    return params
+async def cancel(update: Update, context: CallbackContext):
+    await update.message.reply_text("Поиск отменен")
 
 
-def search(params):
-    url = 'https://api.kinopoisk.dev/v1.4/movie?page=1&limit=10'
-    try:
-        response = requests.get(url, headers={'X-API-KEY': KP_TOKEN}, params=params)
-        if response.status_code == 200:
-            res = []
-            data = response.json()
-            for film in data['docs']:
-                msg = get_film_info(film)
-                res.append(msg)
-            return res
-        else:
-            return "Не удалось найти фильмы с такими параметрами"
-    except requests.exceptions.RequestException as e:
-        return "Не удалось найти фильмы с такими параметрами"
+def main():
+    app = Application.builder().token(TELEGRAM_TOKEN).build()
+
+    app.add_handler(CommandHandler("start", start))
+    app.add_handler(CommandHandler("random", random_handler))
+
+    app.add_handler(ConversationHandler(
+        entry_points=[CommandHandler("film", film_handler)],
+        states={
+            INPUT_MOVIE: [MessageHandler(filters.TEXT & ~filters.COMMAND, search_movie)]
+        },
+        fallbacks=[CommandHandler("cancel", cancel)]
+    ))
+
+    app.run_polling()
 
 
-print("Добро пожаловать в Kinopoisk API клиент!")
-print("=" * 50)
-
-while True:
-    print("\nДоступные команды:")
-    print("1. Получить случайный фильм")
-    print("2. Поиск фильма по названию")
-    print("3. Расширенный поиск по параметрам")
-    print("4. Выход")
-    print("=" * 50)
-
-    choice = input("\nВыберите действие (1-4): ").strip()
-
-    if choice == '1':
-        print("\n" + "=" * 50)
-        print("Случайный фильм:")
-        print("=" * 50)
-        result = random_film()
-        print(result)
-
-    elif choice == '2':
-        print("\n" + "=" * 50)
-        film_name = input("Введите название фильма для поиска: ").strip()
-        if not film_name:
-            print("Название не может быть пустым!")
-            continue
-
-        print(f"\nРезультаты поиска по запросу '{film_name}':")
-        print("=" * 50)
-        result = search_film(film_name)
-
-        if isinstance(result, list):
-            if not result:
-                print("Фильмы не найдены.")
-            else:
-                for i, film in enumerate(result, 1):
-                    print(f"\nРезультат {i}:")
-                    print("-" * 30)
-                    print(film)
-        else:
-            print(result)
-
-    elif choice == '3':
-        print("\n" + "=" * 50)
-        print("Расширенный поиск")
-        print("=" * 50)
-        print("Заполните параметры (или введите '-' для пропуска):")
-
-        params = get_params()
-
-        if not params:
-            print("Не выбрано ни одного параметра для поиска.")
-            continue
-
-        result = search(params)
-
-        if isinstance(result, list):
-            if not result:
-                print("Фильмы не найдены по заданным параметрам.")
-            else:
-                print(f"Найдено фильмов: {len(result)}\n")
-                for i, film in enumerate(result, 1):
-                    print(f"Фильм {i}:")
-                    print("-" * 30)
-                    print(film)
-                    print()
-        else:
-            print(result)
-
-    elif choice == '4':
-        print("\nСпасибо за использование! До свидания!")
-        break
-
-    else:
-        print("\nНеверный выбор. Пожалуйста, выберите от 1 до 4.")
+if __name__ == '__main__':
+    main()
