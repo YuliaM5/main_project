@@ -56,7 +56,7 @@ def get_film_info(data):
         if 'imdb' in data["rating"]:
             if data["rating"]["imdb"] != 0:
                 msg += f'Рейтинг imdb: {data["rating"]["imdb"]}' + '\n'
-    if 'shortDescription' in data:
+    if 'shortDescription' in data and data["shortDescription"]:
         msg += f'Описание: {data["shortDescription"]}' + '\n'
 
     img_url = None
